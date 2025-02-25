@@ -1,0 +1,25 @@
+# Virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# Log files
+*.log
+
+# VS Code settings
+.vscode/
+
+# Dependency files
+Pipfile
+Pipfile.lock
+
+# Compiled code
+*.pyc
+
+# Database
+*.sqlite3
