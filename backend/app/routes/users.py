@@ -1,7 +1,3 @@
-"""
-User-related API routes for CRUD operations.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.database import db
 from app.models import UserCreate, UserUpdate, UserInDB
@@ -11,6 +7,7 @@ from datetime import datetime, timezone
 
 router = APIRouter()
 
+# Constants for error messages
 ERROR_404_MESSAGE = "User not found"
 ERROR_400_EMAIL_EXISTS_MESSAGE = "Email already registered"
 
@@ -22,7 +19,7 @@ async def create_user(user: UserCreate):
     :param user: UserCreate schema.
     :return: ID of the newly created user.
     """
-    existing_user = await db.users.find_one({"email": user.email})
+    existing_user = await db["users"].find_one({"email": user.email})
     if existing_user:
         raise HTTPException(status_code=400, detail=ERROR_400_EMAIL_EXISTS_MESSAGE)
 
@@ -34,9 +31,11 @@ async def create_user(user: UserCreate):
         "created": datetime.now(timezone.utc),
         "updated": datetime.now(timezone.utc)
     }
-    
     result = await db.users.insert_one(new_user)
-    return {"id": str(result.inserted_id)}
+    if not result.inserted_id:
+        raise HTTPException(status_code=500, detail="User creation failed")
+    
+    return {"id": str(result.inserted_id), "message": "User created successfully"}
 
 @router.get("/users", response_model=list[UserInDB])
 async def list_users():

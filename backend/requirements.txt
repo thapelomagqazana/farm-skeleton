@@ -8,3 +8,8 @@ pyjwt
 python-jose[cryptography]
 email-validator
 pydantic[email]
+pytest
+requests
+mongomock 
+pytest-asyncio
+httpx

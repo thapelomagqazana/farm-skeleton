@@ -5,6 +5,8 @@ __pycache__/
 *.pyo
 *.pyd
 
+.pytest_cache
+
 # Environment variables
 .env
 
