@@ -12,6 +12,7 @@ router = APIRouter()
 # Constants for error messages
 ERROR_404_MESSAGE = "User not found"
 ERROR_400_EMAIL_EXISTS_MESSAGE = "Email already registered"
+ERROR_403_FORBIDDEN_ACCESS_MESSAGE = "Forbidden: Access denied"
 
 # Rate limiting setup
 RATE_LIMIT_TRACKER = {}
@@ -92,7 +93,7 @@ async def list_users(
     
     # Ensure only admins can fetch all users
     if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Forbidden: Access denied")
+        raise HTTPException(status_code=403, detail=ERROR_403_FORBIDDEN_ACCESS_MESSAGE)
 
     # Count total users
     total_users = await db.users.count_documents({})
@@ -143,7 +144,7 @@ async def get_user(request: Request, user_id: str, current_user: dict = Depends(
 
     # Authorization: Users can only access their own profiles (unless admin)
     if current_user["role"] != "admin" and str(current_user["_id"]) != user_id:
-        raise HTTPException(status_code=403, detail="Forbidden: Access denied")
+        raise HTTPException(status_code=403, detail=ERROR_403_FORBIDDEN_ACCESS_MESSAGE)
 
     # Convert MongoDB ObjectId to string and return response
     return UserResponse(
@@ -153,17 +154,87 @@ async def get_user(request: Request, user_id: str, current_user: dict = Depends(
         created_at=user.get("created_at", datetime.now(timezone.utc).isoformat())
     )
 
-@router.put("/users/{user_id}", response_model=UserInDB)
-async def update_user(user_id: str, user_update: UserUpdate):
-    """Update user details."""
-    update_data = {k: v for k, v in user_update.dict(exclude_unset=True).items()}
-    update_data["updated"] = datetime.now(timezone.utc)
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    request: Request, 
+    user_id: str, 
+    user_update: UserUpdate, 
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Updates a user's details with authentication, validation, and security checks.
     
+    - Requires authentication.
+    - Users can only update their profile (unless admin).
+    - Validates ObjectId format.
+    - Ensures email uniqueness and secure password hashing.
+    - Prevents SQL injection & XSS.
+    """
+
+    # Rate limiting check
+    await rate_limit_check(request)
+
+    # Trim user ID and validate
+    user_id = user_id.strip()
+    if not is_valid_objectid(user_id) or re.search(r"['\";<>()]", user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    # Fetch user from DB
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail=ERROR_404_MESSAGE)
+
+    # Authorization: Users can only update their own profile (unless admin)
+    if current_user["role"] != "admin" and str(current_user["_id"]) != user_id:
+        raise HTTPException(status_code=403, detail=ERROR_403_FORBIDDEN_ACCESS_MESSAGE)
+
+    update_data = {}
+
+    # Validate and update name
+    if user_update.name is not None:
+        if user_update.name.strip() == "":
+            raise HTTPException(status_code=422, detail="Name must contain characters")
+        if len(user_update.name) > 255:
+            raise HTTPException(status_code=422, detail="Name cannot exceed 255 characters")
+        if re.search(r"['\";<>()]", user_update.name):  # Prevent XSS and SQL Injection
+            raise HTTPException(status_code=400, detail="Invalid characters in name")
+        update_data["name"] = user_update.name.strip()
+
+    # Validate and update email (ensure uniqueness)
+    if user_update.email is not None:
+        existing_email = await db.users.find_one({"email": user_update.email})
+        if existing_email and str(existing_email["_id"]) != user_id:
+            raise HTTPException(status_code=400, detail=ERROR_400_EMAIL_EXISTS_MESSAGE)
+        update_data["email"] = user_update.email.lower()  # Normalize email
+
+    # Validate and update password (secure hashing)
+    if user_update.password is not None:
+        if len(user_update.password) < 6:
+            raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+        update_data["password"] = hash_password(user_update.password)
+
+    # Validate and update role (admin-only)
+    if user_update.role is not None:
+        if current_user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden: Cannot change role")
+        update_data["role"] = user_update.role.strip()
+
+    # Update timestamp
+    update_data["updated"] = datetime.now(timezone.utc)
+
+    # Apply update
     result = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail=ERROR_404_MESSAGE)
-    
-    return await get_user(user_id)
+
+    # Fetch updated user
+    updated_user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password": 0})  # Exclude password
+    return UserResponse(
+        id=str(updated_user["_id"]),
+        name=updated_user["name"],
+        email=updated_user["email"],
+        created_at=updated_user.get("created_at", datetime.now(timezone.utc).isoformat()),
+    )
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str):

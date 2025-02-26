@@ -8,6 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from app.database import db
+from bson import ObjectId
 import os
 
 # Initialize password hashing
@@ -48,24 +49,31 @@ def check_csrf(request: Request):
     if referer and not any(referer.startswith(origin) for origin in allowed_origins):
         raise HTTPException(status_code=403, detail="CSRF attack detected")
     
-# Function to Decode JWT Token
+# Function to Decode JWT Token and Fetch User by ID
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    """Verifies JWT token and retrieves the authenticated user."""
+    """Verifies JWT token and retrieves the authenticated user by ID."""
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
+        # Decode JWT token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_email = payload.get("sub")
+        user_id = payload.get("sub")  # Extract user ID from token
 
-        if user_email is None:
+        if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
 
-        # Fetch user from DB and ensure role is included
-        user = await db.users.find_one({"email": user_email}, {"_id": 1, "name": 1, "email": 1, "role": 1})
+        # Validate ObjectId format
+        if not ObjectId.is_valid(user_id):
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+        # Fetch user from database using user_id
+        user = await db.users.find_one({"_id": ObjectId(user_id)}, {"_id": 1, "name": 1, "email": 1, "role": 1})
+
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        
+
+        # Ensure role exists
         if "role" not in user:
             user["role"] = "user"  # Default role
 
@@ -73,3 +81,4 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+

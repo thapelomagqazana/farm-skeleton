@@ -54,7 +54,7 @@ async def signin(request: Request, form_data: SignInRequest):
     if email in FAILED_ATTEMPTS:
         FAILED_ATTEMPTS[email] = {"count": 0, "last_attempt": datetime.now(timezone.utc)}
 
-    # Generate JWT Token
-    access_token = create_access_token(data={"sub": email})
+    # Generate JWT Token with user ID
+    access_token = create_access_token(data={"sub": str(user["_id"])})
 
     return {"access_token": access_token, "token_type": "bearer"}
