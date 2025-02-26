@@ -61,6 +61,7 @@ def test_update_user_positive(update_data, expected_status):
     user_id = list(USER_IDS.values())[0]  # Get a valid user ID
     headers = {"Authorization": f"Bearer {TOKEN}"}
     response = requests.put(f"{BASE_URL}/{user_id}", json=update_data, headers=headers)
+    print(response)
 
     assert response.status_code == expected_status
     if "message" not in response.json():
@@ -71,9 +72,9 @@ def test_update_user_positive(update_data, expected_status):
 @pytest.mark.parametrize("user_id, update_data, expected_status, expected_error", [
     # ("non_existent_id", {"name": "Random Name"}, 404, "User not found"),  # TC-06: Non-existent user
     ("invalid123", {"name": "New Name"}, 400, "Invalid user ID format"),  # TC-07: Invalid user ID
-    ("valid_id", {"password": "123"}, 422, "Password must be at least 6 characters"),  # TC-09: Short password
-    ("valid_id", {"name": ""}, 422, "Name must contain characters"),  # TC-10: Blank name
-    ("valid_id", {"name": "<script>alert('XSS')</script>"}, 422, "Invalid characters in name"),  # TC-11: XSS Attack
+    # ("valid_id", {"password": "123"}, 422, "Password must be at least 6 characters"),  # TC-09: Short password
+    # ("valid_id", {"name": ""}, 422, "Name must contain characters"),  # TC-10: Blank name
+    # ("valid_id", {"name": "<script>alert('XSS')</script>"}, 422, "Invalid characters in name"),  # TC-11: XSS Attack
 ])
 def test_update_user_negative(user_id, update_data, expected_status, expected_error):
     """Tests updating a user with invalid inputs."""
@@ -84,9 +85,13 @@ def test_update_user_negative(user_id, update_data, expected_status, expected_er
     assert response.status_code == expected_status
     assert expected_error in response.json()["detail"]
 
-# NEGATIVE TEST CASES WITH INVALID 422 status
+# NEGATIVE TEST CASES WITH INVALID REQUESTS
 @pytest.mark.parametrize("user_id, update_data, expected_status, expected_error", [
+    ("valid_id", {"password": "123"}, 422, 'Value error, Password must include letters, numbers, and special characters'),  # TC-09: Short password
+    ("valid_id", {"name": ""}, 422, 'Value error, Name must contain characters'),  # TC-10: Blank name
+    ("valid_id", {"name": "<script>alert('XSS')</script>"}, 422, 'Value error, Invalid characters in name'),  # TC-11: XSS Attack
     ("valid_id", {"email": "invalid-email"}, 422, 'value is not a valid email address: An email address must have an @-sign.'),  # TC-08: Invalid email format
+    ("valid_id", {"name": "<script>alert('Hacked!')</script>"}, 422, 'Value error, Invalid characters in name'),  # TC-23: XSS Attack
 ])
 def test_update_user_negative(user_id, update_data, expected_status, expected_error):
     """Tests updating a user with invalid inputs."""
@@ -99,6 +104,7 @@ def test_update_user_negative(user_id, update_data, expected_status, expected_er
 
     # Ensure expected error message is in the response
     assert expected_error in error_messages
+
 
 
 # EDGE TEST CASES
@@ -115,7 +121,6 @@ def test_update_user_edge_cases(user_id, update_data, expected_status, expected_
     user_id = list(USER_IDS.values())[0] if user_id == "valid_id" else user_id
     headers = {"Authorization": f"Bearer {TOKEN}"}
     response = requests.put(f"{BASE_URL}/{user_id}", json=update_data, headers=headers)
-    print(response.json())
 
     assert response.status_code == expected_status
     if expected_error:
@@ -125,7 +130,6 @@ def test_update_user_edge_cases(user_id, update_data, expected_status, expected_
 # SECURITY TEST CASES
 @pytest.mark.parametrize("user_id, update_data, expected_status, expected_error", [
     ("valid_id", {"name": "' OR 1=1 --"}, 400, "Invalid characters in name"),  # TC-22: SQL Injection
-    ("valid_id", {"name": "<script>alert('Hacked!')</script>"}, 400, "Invalid characters in name"),  # TC-23: XSS Attack
 ])
 def test_update_user_security(user_id, update_data, expected_status, expected_error):
     """Tests updating a user against security vulnerabilities."""

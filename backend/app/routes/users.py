@@ -13,6 +13,9 @@ router = APIRouter()
 ERROR_404_MESSAGE = "User not found"
 ERROR_400_EMAIL_EXISTS_MESSAGE = "Email already registered"
 ERROR_403_FORBIDDEN_ACCESS_MESSAGE = "Forbidden: Access denied"
+ERROR_400_INVALID_ID = "Invalid user ID format"
+ERROR_403_ROLE_CHANGE = "Forbidden: Cannot change role"
+ERROR_401_NOT_AUTHENTICATED = "Not authenticated"
 
 # Rate limiting setup
 RATE_LIMIT_TRACKER = {}
@@ -134,7 +137,7 @@ async def get_user(request: Request, user_id: str, current_user: dict = Depends(
 
     # Check for invalid formats (SQL Injection, XSS, improper IDs)
     if not is_valid_objectid(user_id) or re.search(r"['\";<>()]", user_id):
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
+        raise HTTPException(status_code=400, detail=ERROR_400_INVALID_ID)
 
     # Fetch user from DB
     user = await db.users.find_one({"_id": ObjectId(user_id)}, {"_id": 1, "name": 1, "email": 1, "created_at": 1})
@@ -154,6 +157,49 @@ async def get_user(request: Request, user_id: str, current_user: dict = Depends(
         created_at=user.get("created_at", datetime.now(timezone.utc).isoformat())
     )
 
+# **Helper Functions**
+def validate_user_id(user_id: str):
+    """Validates the user ID format."""
+    if not is_valid_objectid(user_id.strip()) or re.search(r"['\";<>()]", user_id):
+        raise HTTPException(status_code=400, detail=ERROR_400_INVALID_ID)
+    return ObjectId(user_id.strip())
+
+def validate_name(name: str):
+    """Validates the name field."""
+    name = name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Name must contain characters")
+    if len(name) > 255:
+        raise HTTPException(status_code=422, detail="Name cannot exceed 255 characters")
+    if re.search(r"['\";<>()]", name):
+        raise HTTPException(status_code=400, detail="Invalid characters in name")
+    return name
+
+async def validate_email(email: str, user_id: str):
+    """Check if email is unique and return the normalized email."""
+    existing_email = await db.users.find_one({"email": email})
+    if existing_email and str(existing_email["_id"]) != user_id:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    return email.lower()
+
+
+def validate_password(password: str):
+    """Validates and hashes the password."""
+    if len(password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+    return hash_password(password)
+
+async def update_user_in_db(user_id: ObjectId, update_data: dict):
+    """Updates user details in the database and returns the updated user."""
+    update_data["updated"] = datetime.now(timezone.utc)
+    result = await db.users.update_one({"_id": user_id}, {"$set": update_data})
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail=ERROR_404_MESSAGE)
+
+    return await db.users.find_one({"_id": user_id}, {"password": 0})  # Exclude password
+
+# **PUT /api/users/{user_id}**
 @router.put("/users/{user_id}", response_model=UserResponse)
 async def update_user(
     request: Request, 
@@ -161,74 +207,37 @@ async def update_user(
     user_update: UserUpdate, 
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Updates a user's details with authentication, validation, and security checks.
-    
-    - Requires authentication.
-    - Users can only update their profile (unless admin).
-    - Validates ObjectId format.
-    - Ensures email uniqueness and secure password hashing.
-    - Prevents SQL injection & XSS.
-    """
+    """Updates user details with authentication, validation, and security checks."""
 
-    # Rate limiting check
-    await rate_limit_check(request)
+    await rate_limit_check(request)  # Rate limiting
 
-    # Trim user ID and validate
-    user_id = user_id.strip()
-    if not is_valid_objectid(user_id) or re.search(r"['\";<>()]", user_id):
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
+    user_id = validate_user_id(user_id)
 
-    # Fetch user from DB
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    user = await db.users.find_one({"_id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail=ERROR_404_MESSAGE)
 
-    # Authorization: Users can only update their own profile (unless admin)
-    if current_user["role"] != "admin" and str(current_user["_id"]) != user_id:
+    if current_user["role"] != "admin" and str(current_user["_id"]) != str(user_id):
         raise HTTPException(status_code=403, detail=ERROR_403_FORBIDDEN_ACCESS_MESSAGE)
 
     update_data = {}
+    if user_update.name:
+        update_data["name"] = validate_name(user_update.name)
 
-    # Validate and update name
-    if user_update.name is not None:
-        if user_update.name.strip() == "":
-            raise HTTPException(status_code=422, detail="Name must contain characters")
-        if len(user_update.name) > 255:
-            raise HTTPException(status_code=422, detail="Name cannot exceed 255 characters")
-        if re.search(r"['\";<>()]", user_update.name):  # Prevent XSS and SQL Injection
-            raise HTTPException(status_code=400, detail="Invalid characters in name")
-        update_data["name"] = user_update.name.strip()
+    if user_update.email:
+        update_data["email"] = await validate_email(user_update.email, str(user_id))
 
-    # Validate and update email (ensure uniqueness)
-    if user_update.email is not None:
-        existing_email = await db.users.find_one({"email": user_update.email})
-        if existing_email and str(existing_email["_id"]) != user_id:
-            raise HTTPException(status_code=400, detail=ERROR_400_EMAIL_EXISTS_MESSAGE)
-        update_data["email"] = user_update.email.lower()  # Normalize email
 
-    # Validate and update password (secure hashing)
-    if user_update.password is not None:
-        if len(user_update.password) < 6:
-            raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
-        update_data["password"] = hash_password(user_update.password)
+    if user_update.password:
+        update_data["password"] = validate_password(user_update.password)
 
-    # Validate and update role (admin-only)
-    if user_update.role is not None:
+    if user_update.role:
         if current_user["role"] != "admin":
-            raise HTTPException(status_code=403, detail="Forbidden: Cannot change role")
+            raise HTTPException(status_code=403, detail=ERROR_403_ROLE_CHANGE)
         update_data["role"] = user_update.role.strip()
 
-    # Update timestamp
-    update_data["updated"] = datetime.now(timezone.utc)
+    updated_user = await update_user_in_db(user_id, update_data)
 
-    # Apply update
-    result = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_data})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail=ERROR_404_MESSAGE)
-
-    # Fetch updated user
-    updated_user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password": 0})  # Exclude password
     return UserResponse(
         id=str(updated_user["_id"]),
         name=updated_user["name"],
@@ -236,10 +245,44 @@ async def update_user(
         created_at=updated_user.get("created_at", datetime.now(timezone.utc).isoformat()),
     )
 
+# **DELETE /api/users/{user_id}**
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: str):
-    """Delete a user by ID."""
-    result = await db.users.delete_one({"_id": ObjectId(user_id)})
-    if result.deleted_count == 0:
+async def delete_user(
+    request: Request, 
+    user_id: str, 
+    current_user: dict = Depends(get_current_user)  # Authenticated user
+):
+    """
+    Delete a user by ID with proper authentication and security checks.
+
+    - Requires authentication.
+    - Checks for valid ObjectId format.
+    - Ensures proper authorization.
+    - Prevents brute force attacks.
+    """
+    
+    await rate_limit_check(request)  # Apply rate limiting
+
+    user_id = user_id.strip()  # Trim spaces
+
+    # **Security: Validate user_id format**
+    if not is_valid_objectid(user_id) or re.search(r"['\";<>()]", user_id):
+        raise HTTPException(status_code=400, detail=ERROR_400_INVALID_ID)
+
+    # **Fetch user from DB**
+    user_to_delete = await db.users.find_one({"_id": ObjectId(user_id)})
+
+    if not user_to_delete:
         raise HTTPException(status_code=404, detail=ERROR_404_MESSAGE)
+
+    # **Authorization: Only allow user to delete self or admin to delete any user**
+    if current_user["role"] != "admin" and str(current_user["_id"]) != user_id:
+        raise HTTPException(status_code=403, detail=ERROR_403_FORBIDDEN_ACCESS_MESSAGE)
+
+    # **Delete user from DB**
+    result = await db.users.delete_one({"_id": ObjectId(user_id)})
+
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=500, detail="User deletion failed")
+
     return {"message": "User deleted successfully"}
