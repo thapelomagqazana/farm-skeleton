@@ -1,6 +1,7 @@
 import pytest
 import requests
 import time
+from app.database import db
 
 # Base API URLs
 BASE_URL = "http://localhost:8000/auth/signin"
@@ -23,9 +24,8 @@ def setup_users():
         requests.post(USER_REGISTRATION_URL, json={"name": "Test User", **user})
 
     yield  # Run tests
-
-    # Cleanup: Delete test users
-    requests.delete("http://localhost:8000/api/users")
+    # Cleanup test users directly from MongoDB
+    db.users.delete_many({})  # Deletes all test users
 
 
 # POSITIVE TEST CASES

@@ -62,3 +62,9 @@ class SignInRequest(BaseModel):
             raise ValueError("Password must include letters, numbers, and special characters")
         return value
 
+# Pydantic Model for User Response
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: EmailStr
+    created_at: str

@@ -3,9 +3,10 @@ Handles password hashing and JWT authentication.
 """
 
 from passlib.context import CryptContext
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Depends
+from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
-from jose import jwt
+from jose import jwt, JWTError
 import os
 
 # Initialize password hashing
@@ -15,6 +16,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/signin")
 
 def hash_password(password: str) -> str:
     """Hashes a plain-text password using bcrypt."""
@@ -44,3 +46,18 @@ def check_csrf(request: Request):
 
     if referer and not any(referer.startswith(origin) for origin in allowed_origins):
         raise HTTPException(status_code=403, detail="CSRF attack detected")
+    
+# Function to Decode JWT Token
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    """Verifies JWT token and retrieves the authenticated user."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return email
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
