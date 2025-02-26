@@ -48,3 +48,17 @@ class UserUpdate(BaseModel):
 class UserInDB(UserBase):
     created: datetime
     updated: datetime
+
+# Pydantic Model for Sign-in
+class SignInRequest(BaseModel):
+    email: EmailStr = Field(..., description="User's unique email address")
+    password: str = Field(..., min_length=6, max_length=128, description="User's password")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        """Ensure password contains letters, numbers, and special characters"""
+        if not re.search(r'[A-Za-z]', value) or not re.search(r'\d', value) or not re.search(r'[\W_]', value):
+            raise ValueError("Password must include letters, numbers, and special characters")
+        return value
+

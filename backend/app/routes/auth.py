@@ -2,36 +2,59 @@
 Authentication routes for user sign-in and JWT token generation.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Request
 from app.database import db
-from app.security import verify_password, create_access_token
-from datetime import timedelta
-from app.models import UserCreate
-from pydantic import BaseModel
+from app.security import verify_password, create_access_token, check_csrf
+from datetime import datetime, timedelta, timezone
+from app.models import SignInRequest
 
 router = APIRouter()
 
-class Token(BaseModel):
-    """Schema for JWT token response."""
-    access_token: str
-    token_type: str
 
-class LoginRequest(BaseModel):
-    """Schema for user login request."""
-    email: str
-    password: str
+# Rate limiting (Prevent brute-force attacks)
+FAILED_ATTEMPTS = {}
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_TIME = 60  # Lock for 60 seconds after MAX_FAILED_ATTEMPTS
 
-@router.post("/signin", response_model=Token)
-async def signin(credentials: LoginRequest):
-    """
-    Authenticate user and return JWT token.
+# API Endpoint for Sign-in
+@router.post("/signin")
+async def signin(request: Request, form_data: SignInRequest):
+    check_csrf(request)  # CSRF protection now correctly uses `request`
 
-    :param credentials: LoginRequest schema.
-    :return: JWT access token.
-    """
-    user = await db.users.find_one({"email": credentials.email})
-    if not user or not verify_password(credentials.password, user["password"]):
-        raise HTTPException(status_code=400, detail="Invalid email or password")
+    email = form_data.email.strip().lower()  # Normalize email
+    password = form_data.password
 
-    access_token = create_access_token(data={"sub": str(user["_id"])}, expires_delta=timedelta(minutes=30))
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
+    # Find user in database
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Brute Force Protection
+    if email in FAILED_ATTEMPTS and FAILED_ATTEMPTS[email]["count"] >= MAX_FAILED_ATTEMPTS:
+        last_attempt = FAILED_ATTEMPTS[email]["last_attempt"]
+        if (datetime.now(timezone.utc) - last_attempt).total_seconds() < LOCKOUT_TIME:
+            raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
+        else:
+            FAILED_ATTEMPTS[email] = {"count": 0, "last_attempt": datetime.now(timezone.utc)}
+
+    # Verify Password
+    if not verify_password(password, user["password"]):
+        if email not in FAILED_ATTEMPTS:
+            FAILED_ATTEMPTS[email] = {"count": 1, "last_attempt": datetime.now(timezone.utc)}
+        else:
+            FAILED_ATTEMPTS[email]["count"] += 1
+            FAILED_ATTEMPTS[email]["last_attempt"] = datetime.now(timezone.utc)
+
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Reset failed attempts on success
+    if email in FAILED_ATTEMPTS:
+        FAILED_ATTEMPTS[email] = {"count": 0, "last_attempt": datetime.now(timezone.utc)}
+
+    # Generate JWT Token
+    access_token = create_access_token(data={"sub": email})
+
     return {"access_token": access_token, "token_type": "bearer"}

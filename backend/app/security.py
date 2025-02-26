@@ -3,6 +3,7 @@ Handles password hashing and JWT authentication.
 """
 
 from passlib.context import CryptContext
+from fastapi import HTTPException, Request
 from datetime import datetime, timedelta, timezone
 from jose import jwt
 import os
@@ -35,3 +36,11 @@ def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# CSRF Protection: Reject requests from unknown origins
+def check_csrf(request: Request):
+    allowed_origins = {"http://localhost:3000", "https://my-trusted-site.com"}
+    referer = request.headers.get("Referer")
+
+    if referer and not any(referer.startswith(origin) for origin in allowed_origins):
+        raise HTTPException(status_code=403, detail="CSRF attack detected")
