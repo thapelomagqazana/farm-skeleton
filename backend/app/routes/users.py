@@ -5,6 +5,7 @@ from app.models import UserCreate, UserUpdate, UserInDB, UserResponse
 from app.security import hash_password, get_current_user
 from bson import ObjectId
 from datetime import datetime, timezone
+import re
 
 router = APIRouter()
 
@@ -16,6 +17,14 @@ ERROR_400_EMAIL_EXISTS_MESSAGE = "Email already registered"
 RATE_LIMIT_TRACKER = {}
 MAX_REQUESTS = 10  # Maximum allowed requests
 TIME_FRAME = 60  # 60 seconds time window
+
+
+@router.post("/test/reset_rate_limit")
+async def reset_rate_limit(request: Request):
+    """Resets the rate limiting tracker for testing."""
+    global RATE_LIMIT_TRACKER
+    RATE_LIMIT_TRACKER = {}  # Reset
+    return {"message": "Rate limiting reset"}
 
 async def rate_limit_check(request: Request):
     """Prevents excessive requests (Brute Force Protection)"""
@@ -53,6 +62,7 @@ async def create_user(user: UserCreate):
         "name": user.name,
         "email": user.email,
         "password": hashed_password,
+        "role": user.role if user.role else "user",  # Ensure role is stored
         "created": datetime.now(timezone.utc),
         "updated": datetime.now(timezone.utc)
     }
@@ -65,7 +75,7 @@ async def create_user(user: UserCreate):
 @router.get("/users", response_model=List[UserResponse])
 async def list_users(
     request: Request, 
-    current_user: str = Depends(get_current_user),  # Requires authentication
+    current_user: dict = Depends(get_current_user),  # Requires authentication
     page: int = Query(1, ge=1, description="Page number (must be >= 1)"),
     limit: int = Query(10, ge=1, description="Limit per page (default: 10, max: 100)"),
 ):
@@ -79,6 +89,10 @@ async def list_users(
     # Prevent SQL Injection or Non-Numeric Queries
     if not isinstance(page, int) or not isinstance(limit, int):
         raise HTTPException(status_code=400, detail="Invalid pagination values")
+    
+    # Ensure only admins can fetch all users
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden: Access denied")
 
     # Count total users
     total_users = await db.users.count_documents({})
@@ -90,24 +104,54 @@ async def list_users(
     users_cursor = db.users.find({}, {"_id": 1, "name": 1, "email": 1, "created_at": 1}).skip(skip).limit(limit)
     users_list = await users_cursor.to_list(length=limit)
 
-    # Convert MongoDB `_id` to string format
-    for user in users_list:
-        user["id"] = str(user["_id"])
-        del user["_id"]
+    return [
+            UserResponse(
+                id=str(user["_id"]),
+                name=user["name"],
+                email=user["email"],
+                created_at=user.get("created_at", datetime.now(timezone.utc).isoformat()),
+            ) for user in users_list
+        ]
 
-        # Ensure `created_at` exists; fallback to a default timestamp
-        if "created_at" not in user:
-            user["created_at"] = datetime.now(timezone.utc).isoformat()
+# Helper function to validate ObjectId format
+def is_valid_objectid(user_id: str) -> bool:
+    return ObjectId.is_valid(user_id)
 
-    return users_list
+# GET /api/users/{user_id} - Fetch a specific user by ID
+@router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(request: Request, user_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Fetch a user by ID with proper authentication and security checks.
 
-@router.get("/users/{user_id}", response_model=UserInDB)
-async def get_user(user_id: str):
-    """Fetch a user by ID."""
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    - Requires authentication.
+    - Checks for valid ObjectId format.
+    - Ensures proper authorization.
+    """
+    await rate_limit_check(request)  # Apply rate limiting
+
+    user_id = user_id.strip()  # Trim spaces
+
+    # Check for invalid formats (SQL Injection, XSS, improper IDs)
+    if not is_valid_objectid(user_id) or re.search(r"['\";<>()]", user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    # Fetch user from DB
+    user = await db.users.find_one({"_id": ObjectId(user_id)}, {"_id": 1, "name": 1, "email": 1, "created_at": 1})
+
     if not user:
-        raise HTTPException(status_code=404, detail=ERROR_404_MESSAGE)
-    return {"name": user["name"], "email": user["email"], "created": user["created"], "updated": user["updated"]}
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Authorization: Users can only access their own profiles (unless admin)
+    if current_user["role"] != "admin" and str(current_user["_id"]) != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden: Access denied")
+
+    # Convert MongoDB ObjectId to string and return response
+    return UserResponse(
+        id=str(user["_id"]),
+        name=user["name"],
+        email=user["email"],
+        created_at=user.get("created_at", datetime.now(timezone.utc).isoformat())
+    )
 
 @router.put("/users/{user_id}", response_model=UserInDB)
 async def update_user(user_id: str, user_update: UserUpdate):

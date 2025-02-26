@@ -6,6 +6,7 @@ from app.database import db
 # Base API URLs
 BASE_URL = "http://localhost:8000/auth/signin"
 USER_REGISTRATION_URL = "http://localhost:8000/api/users"
+RESET_RATE_LIMIT_URL = "http://localhost:8000/api/test/reset_rate_limit"
 
 # Test Users
 TEST_USERS = [
@@ -19,6 +20,10 @@ TEST_USERS = [
 # Setup: Register test users
 @pytest.fixture(scope="module", autouse=True)
 def setup_users():
+    """Resets the rate limit before each test case."""
+    response = requests.post(RESET_RATE_LIMIT_URL)
+    assert response.status_code == 200  # Ensure reset is successful
+
     """Ensures test users exist before running tests."""
     for user in TEST_USERS:
         requests.post(USER_REGISTRATION_URL, json={"name": "Test User", **user})

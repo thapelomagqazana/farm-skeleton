@@ -10,13 +10,15 @@ REGISTER_URL = "http://localhost:8000/api/users"
 
 # Test Users
 TEST_USERS = [
-    {"name": "User One", "email": "user1@example.com", "password": "Password123!"},
+    {"name": "User One", "email": "user1@example.com", "password": "Password123!", "role": "admin"},
     {"name": "User Two", "email": "user2@example.com", "password": "Password123!"},
     {"name": "User Three", "email": "user3@example.com", "password": "Password123!"},
 ]
 
 # Store Authentication Token
 TOKEN = ""
+
+RESET_RATE_LIMIT_URL = "http://localhost:8000/api/test/reset_rate_limit"
 
 # Setup: Register users and obtain JWT token
 @pytest.fixture(scope="module", autouse=True)
@@ -25,6 +27,10 @@ def setup_users():
     # Create test users
     for user in TEST_USERS:
         requests.post(REGISTER_URL, json=user)
+
+    """Resets the rate limit before each test case."""
+    response = requests.post(RESET_RATE_LIMIT_URL)
+    assert response.status_code == 200  # Ensure reset is successful
 
     # Authenticate and get a JWT token
     response = requests.post(SIGNIN_URL, json={"email": TEST_USERS[0]["email"], "password": TEST_USERS[0]["password"]})
@@ -48,6 +54,7 @@ def test_list_users_positive(query_params, expected_status):
     """Tests user listing with valid parameters."""
     headers = {"Authorization": f"Bearer {TOKEN}"}
     response = requests.get(f"{BASE_URL}{query_params}", headers=headers)
+    print(response.json())
     assert response.status_code == expected_status
     assert isinstance(response.json(), list)
 
@@ -96,7 +103,7 @@ def test_list_users_edge_cases(query_params, expected_status):
     response = requests.get(f"{BASE_URL}{query_params}", headers=headers)
     assert response.status_code == expected_status
 
-# 🔒 SECURITY TEST CASES
+# SECURITY TEST CASES
 @pytest.mark.parametrize("query_params, expected_status", [
     ("?page=1 OR 1=1", 422),  # SQL Injection Attempt
     ("?page=<script>alert('Hacked!')</script>&limit=10", 422),  # XSS Attack

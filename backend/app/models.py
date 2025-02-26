@@ -12,11 +12,14 @@ import re
 class UserBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="User's full name")
     email: EmailStr = Field(..., description="User's unique email address")
+    # created: datetime
+    # updated: datetime
 
 
 # Schema for user creation
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, max_length=128, description="User's password")
+    role: str = Field(default="user", description="User role (e.g., user, admin)")
 
     @field_validator("name")
     @classmethod
@@ -42,12 +45,15 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     password: Optional[str] = None
+    role: Optional[str] = None  # Allow updating role
 
 
 # Schema for returning user details
 class UserInDB(UserBase):
     created: datetime
     updated: datetime
+    role: str
+
 
 # Pydantic Model for Sign-in
 class SignInRequest(BaseModel):
@@ -62,9 +68,10 @@ class SignInRequest(BaseModel):
             raise ValueError("Password must include letters, numbers, and special characters")
         return value
 
+
 # Pydantic Model for User Response
 class UserResponse(BaseModel):
     id: str
     name: str
     email: EmailStr
-    created_at: str
+    created_at: datetime

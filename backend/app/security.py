@@ -7,6 +7,7 @@ from fastapi import HTTPException, Request, Depends
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
+from app.database import db
 import os
 
 # Initialize password hashing
@@ -48,16 +49,27 @@ def check_csrf(request: Request):
         raise HTTPException(status_code=403, detail="CSRF attack detected")
     
 # Function to Decode JWT Token
-def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme)):
     """Verifies JWT token and retrieves the authenticated user."""
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        user_email = payload.get("sub")
+
+        if user_email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return email
+
+        # Fetch user from DB and ensure role is included
+        user = await db.users.find_one({"email": user_email}, {"_id": 1, "name": 1, "email": 1, "role": 1})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        if "role" not in user:
+            user["role"] = "user"  # Default role
+
+        return user
+
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")

@@ -6,6 +6,7 @@ from app.database import db
 
 # Base API URL
 BASE_URL = "http://localhost:8000/api/users"
+RESET_RATE_LIMIT_URL = "http://localhost:8000/api/test/reset_rate_limit"
 
 # Generate a unique email to avoid duplicate issues
 def generate_unique_email():
@@ -17,6 +18,10 @@ def generate_long_string(length):
 
 @pytest.fixture(scope="function", autouse=True)
 def cleanup():
+    """Resets the rate limit before each test case."""
+    response = requests.post(RESET_RATE_LIMIT_URL)
+    assert response.status_code == 200  # Ensure reset is successful
+    
     """Ensures test environment is clean before and after tests."""
     yield
     # Cleanup test users directly from MongoDB
