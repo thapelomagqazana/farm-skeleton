@@ -20,6 +20,14 @@ ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/signin")
 
+# Store revoked tokens temporarily (or use a DB)
+REVOKED_TOKENS = set()
+
+
+def invalidate_token(token: str):
+    """Adds the token to the revoked list."""
+    REVOKED_TOKENS.add(token)
+
 def hash_password(password: str) -> str:
     """Hashes a plain-text password using bcrypt."""
     return pwd_context.hash(password)

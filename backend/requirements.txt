@@ -13,3 +13,4 @@ requests
 mongomock 
 pytest-asyncio
 httpx
+slowapi

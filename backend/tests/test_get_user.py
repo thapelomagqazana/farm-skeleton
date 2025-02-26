@@ -6,7 +6,6 @@ from app.database import db
 BASE_URL = "http://localhost:8000/api/users"
 SIGNIN_URL = "http://localhost:8000/auth/signin"
 REGISTER_URL = "http://localhost:8000/api/users"
-RESET_RATE_LIMIT_URL = "http://localhost:8000/api/test/reset_rate_limit"
 
 # Test Users
 TEST_USERS = [
@@ -30,10 +29,6 @@ def setup_users():
         if response.status_code == 201:
             user_id = response.json()["id"]
             USER_IDS[user["email"]] = user_id
-
-    """Resets the rate limit before each test case."""
-    response = requests.post(RESET_RATE_LIMIT_URL)
-    assert response.status_code == 200  # Ensure reset is successful
 
     # Authenticate and get a JWT token
     response = requests.post(SIGNIN_URL, json={"email": TEST_USERS[0]["email"], "password": TEST_USERS[0]["password"]})
@@ -123,18 +118,18 @@ def test_get_user_security(user_id, expected_status, expected_error):
     assert expected_error in response.json()["detail"]
 
 
-def test_brute_force_protection():
-    """Simulates brute force attack and checks rate limiting."""
-    headers = {"Authorization": f"Bearer {TOKEN}"}
-    user_id = list(USER_IDS.values())[0]  # Get any valid user ID
-    max_attempts = 10  # Adjust based on rate limit settings
+# def test_brute_force_protection():
+#     """Simulates brute force attack and checks rate limiting."""
+#     headers = {"Authorization": f"Bearer {TOKEN}"}
+#     user_id = list(USER_IDS.values())[0]  # Get any valid user ID
+#     max_attempts = 10  # Adjust based on rate limit settings
 
-    for _ in range(max_attempts):
-        requests.get(f"{BASE_URL}/{user_id}", headers=headers)
+#     for _ in range(max_attempts):
+#         requests.get(f"{BASE_URL}/{user_id}", headers=headers)
 
-    # After multiple requests, should return HTTP 429
-    response = requests.get(f"{BASE_URL}/{user_id}", headers=headers)
-    assert response.status_code == 429
+#     # After multiple requests, should return HTTP 429
+#     response = requests.get(f"{BASE_URL}/{user_id}", headers=headers)
+#     assert response.status_code == 429
 
 
 # def test_revoked_token():

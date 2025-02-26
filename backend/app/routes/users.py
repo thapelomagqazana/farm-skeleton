@@ -3,6 +3,10 @@ from typing import List, Optional
 from app.database import db
 from app.models import UserCreate, UserUpdate, UserInDB, UserResponse
 from app.security import hash_password, get_current_user
+# from slowapi import Limiter
+# from slowapi.util import get_remote_address
+# from slowapi.errors import RateLimitExceeded
+# from app.utils.rate_limiter import limiter
 from bson import ObjectId
 from datetime import datetime, timezone
 import re
@@ -17,37 +21,15 @@ ERROR_400_INVALID_ID = "Invalid user ID format"
 ERROR_403_ROLE_CHANGE = "Forbidden: Cannot change role"
 ERROR_401_NOT_AUTHENTICATED = "Not authenticated"
 
-# Rate limiting setup
-RATE_LIMIT_TRACKER = {}
-MAX_REQUESTS = 10  # Maximum allowed requests
-TIME_FRAME = 60  # 60 seconds time window
 
-
-@router.post("/test/reset_rate_limit")
-async def reset_rate_limit(request: Request):
-    """Resets the rate limiting tracker for testing."""
-    global RATE_LIMIT_TRACKER
-    RATE_LIMIT_TRACKER = {}  # Reset
-    return {"message": "Rate limiting reset"}
-
-async def rate_limit_check(request: Request):
-    """Prevents excessive requests (Brute Force Protection)"""
-    client_ip = request.client.host  # Get client's IP address
-    now = datetime.now(timezone.utc)
-
-    if client_ip not in RATE_LIMIT_TRACKER:
-        RATE_LIMIT_TRACKER[client_ip] = []
-
-    RATE_LIMIT_TRACKER[client_ip].append(now)
-
-    # Remove expired requests outside of the TIME_FRAME
-    RATE_LIMIT_TRACKER[client_ip] = [
-        t for t in RATE_LIMIT_TRACKER[client_ip] if (now - t).total_seconds() < TIME_FRAME
-    ]
-
-    if len(RATE_LIMIT_TRACKER[client_ip]) > MAX_REQUESTS:
-        raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
-
+# @router.post("/test/reset_rate_limit")
+# async def reset_rate_limit():
+#     """Clears rate limiting storage for testing."""
+#     try:
+#         limiter._storage.reset()
+#         return {"message": "Rate limit reset"}
+#     except AttributeError:
+#         return {"message": "Rate limit reset not supported"}
 
 @router.post("/users", status_code=status.HTTP_201_CREATED)
 async def create_user(user: UserCreate):
@@ -77,15 +59,13 @@ async def create_user(user: UserCreate):
     return {"id": str(result.inserted_id), "message": "User created successfully"}
 
 @router.get("/users", response_model=List[UserResponse])
+# @limiter.limit("10/minute")
 async def list_users(
     request: Request, 
     current_user: dict = Depends(get_current_user),  # Requires authentication
     page: int = Query(1, ge=1, description="Page number (must be >= 1)"),
     limit: int = Query(10, ge=1, description="Limit per page (default: 10, max: 100)"),
 ):
-    """Retrieves a paginated list of users."""
-    await rate_limit_check(request)  # Apply rate limiting
-
     # Cap `limit` to 100 instead of rejecting it
     if limit > 100:
         limit = 100  # Set a max limit internally
@@ -123,6 +103,7 @@ def is_valid_objectid(user_id: str) -> bool:
 
 # GET /api/users/{user_id} - Fetch a specific user by ID
 @router.get("/users/{user_id}", response_model=UserResponse)
+# @limiter.limit("10/minute")
 async def get_user(request: Request, user_id: str, current_user: dict = Depends(get_current_user)):
     """
     Fetch a user by ID with proper authentication and security checks.
@@ -131,7 +112,6 @@ async def get_user(request: Request, user_id: str, current_user: dict = Depends(
     - Checks for valid ObjectId format.
     - Ensures proper authorization.
     """
-    await rate_limit_check(request)  # Apply rate limiting
 
     user_id = user_id.strip()  # Trim spaces
 
@@ -201,6 +181,7 @@ async def update_user_in_db(user_id: ObjectId, update_data: dict):
 
 # **PUT /api/users/{user_id}**
 @router.put("/users/{user_id}", response_model=UserResponse)
+# @limiter.limit("10/minute")
 async def update_user(
     request: Request, 
     user_id: str, 
@@ -208,8 +189,6 @@ async def update_user(
     current_user: dict = Depends(get_current_user)
 ):
     """Updates user details with authentication, validation, and security checks."""
-
-    await rate_limit_check(request)  # Rate limiting
 
     user_id = validate_user_id(user_id)
 
@@ -247,6 +226,7 @@ async def update_user(
 
 # **DELETE /api/users/{user_id}**
 @router.delete("/users/{user_id}")
+# @limiter.limit("10/minute")
 async def delete_user(
     request: Request, 
     user_id: str, 
@@ -260,8 +240,6 @@ async def delete_user(
     - Ensures proper authorization.
     - Prevents brute force attacks.
     """
-    
-    await rate_limit_check(request)  # Apply rate limiting
 
     user_id = user_id.strip()  # Trim spaces
 

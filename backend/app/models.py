@@ -12,8 +12,6 @@ import re
 class UserBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="User's full name")
     email: EmailStr = Field(..., description="User's unique email address")
-    # created: datetime
-    # updated: datetime
 
 
 # Schema for user creation

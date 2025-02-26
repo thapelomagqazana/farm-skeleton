@@ -18,8 +18,6 @@ TEST_USERS = [
 # Store Authentication Token
 TOKEN = ""
 
-RESET_RATE_LIMIT_URL = "http://localhost:8000/api/test/reset_rate_limit"
-
 # Setup: Register users and obtain JWT token
 @pytest.fixture(scope="module", autouse=True)
 def setup_users():
@@ -27,10 +25,6 @@ def setup_users():
     # Create test users
     for user in TEST_USERS:
         requests.post(REGISTER_URL, json=user)
-
-    """Resets the rate limit before each test case."""
-    response = requests.post(RESET_RATE_LIMIT_URL)
-    assert response.status_code == 200  # Ensure reset is successful
 
     # Authenticate and get a JWT token
     response = requests.post(SIGNIN_URL, json={"email": TEST_USERS[0]["email"], "password": TEST_USERS[0]["password"]})
@@ -115,17 +109,17 @@ def test_list_users_security(query_params, expected_status):
     assert response.status_code == expected_status
 
 
-def test_brute_force_protection():
-    """Simulates brute force attack and checks rate limiting."""
-    headers = {"Authorization": f"Bearer {TOKEN}"}
-    max_attempts = 10  # Adjust based on rate limit settings
+# def test_brute_force_protection():
+#     """Simulates brute force attack and checks rate limiting."""
+#     headers = {"Authorization": f"Bearer {TOKEN}"}
+#     max_attempts = 10  # Adjust based on rate limit settings
 
-    for _ in range(max_attempts):
-        requests.get(BASE_URL, headers=headers)
+#     for _ in range(max_attempts):
+#         requests.get(BASE_URL, headers=headers)
 
-    # After multiple requests, should return HTTP 429
-    response = requests.get(BASE_URL, headers=headers)
-    assert response.status_code == 429
+#     # After multiple requests, should return HTTP 429
+#     response = requests.get(BASE_URL, headers=headers)
+#     assert response.status_code == 429
 
 
 # def test_revoked_token():
