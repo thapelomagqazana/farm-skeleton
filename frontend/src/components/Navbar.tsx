@@ -21,8 +21,8 @@ const Navbar: React.FC = () => {
         <div className="hidden md:flex space-x-6">
           <Link to="/" className="hover:underline">Home</Link>
           <Link to="/about" className="hover:underline">About</Link>
-          <Link to="/auth/signin" className="hover:underline">Sign In</Link>
-          <Link to="/auth/signup" className="hover:underline">Register</Link>
+          <Link to="/signin" className="hover:underline">Sign In</Link>
+          <Link to="/register" className="hover:underline">Register</Link>
         </div>
 
         {/* Mobile Menu Button */}
@@ -61,8 +61,8 @@ const Navbar: React.FC = () => {
         <div className="md:hidden bg-blue-700 py-2 space-y-2 text-center">
           <Link to="/" className="block py-2 hover:bg-blue-800">Home</Link>
           <Link to="/about" className="block py-2 hover:bg-blue-800">About</Link>
-          <Link to="/auth/signin" className="block py-2 hover:bg-blue-800">Sign In</Link>
-          <Link to="/auth/signup" className="block py-2 hover:bg-blue-800">Register</Link>
+          <Link to="/signin" className="block py-2 hover:bg-blue-800">Sign In</Link>
+          <Link to="/register" className="block py-2 hover:bg-blue-800">Register</Link>
         </div>
       )}
     </nav>

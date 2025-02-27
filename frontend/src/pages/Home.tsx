@@ -1,7 +1,6 @@
 import React from "react";
 import Hero from "../components/Hero";
 import APIList from "../components/APIList";
-import Layout from "../components/Layout";
 import FeatureCard from "../components/FeatureCard";
 
 /**
@@ -10,8 +9,8 @@ import FeatureCard from "../components/FeatureCard";
  * @returns {JSX.Element} The Home component.
  */
 const Home: React.FC = () => {
-  return (
-    <Layout>
+  return (  
+    <>
       <Hero />
       <div className="container mx-auto p-6">
         {/* Features Section */}
@@ -40,7 +39,7 @@ const Home: React.FC = () => {
             Clone the template from GitHub, customize the frontend and backend, and build your application effortlessly.
           </p>
           <a
-            href="https://github.com/your-repo-url"
+            href="https://github.com/thapelomagqazana/farm-skeleton"
             target="_blank"
             rel="noopener noreferrer"
             className="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded transition"
@@ -49,7 +48,7 @@ const Home: React.FC = () => {
           </a>
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 

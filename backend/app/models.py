@@ -91,3 +91,10 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     created_at: datetime
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+
+class LogoutResponse(BaseModel):
+    message: str
