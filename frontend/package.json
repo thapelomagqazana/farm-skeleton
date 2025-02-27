@@ -10,8 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
     "@hookform/resolvers": "^4.1.2",
+    "@mui/material": "^6.4.6",
     "axios": "^1.8.1",
+    "jwt-decode": "^4.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.2",
@@ -21,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@types/jwt-decode": "^2.2.1",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",

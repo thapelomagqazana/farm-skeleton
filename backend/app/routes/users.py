@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from typing import List, Optional
+from typing import List
 from app.database import db
-from app.models import UserCreate, UserUpdate, UserInDB, UserResponse
+from app.models import UserCreate, UserUpdate, UserResponse
 from app.security import hash_password, get_current_user
 from bson import ObjectId
 from datetime import datetime, timezone

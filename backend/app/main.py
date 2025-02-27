@@ -1,9 +1,19 @@
 import logging
 from fastapi import FastAPI, Request, HTTPException, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 from app.routes import users, auth
 from app.security import get_current_user
 from fastapi.openapi.utils import get_openapi
+from dotenv import load_dotenv
+import os
+
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Get values from .env
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
 
 # Configure Logging
 logging.basicConfig(
@@ -25,6 +35,15 @@ app = FastAPI(
     docs_url="/docs",  # Swagger UI
     redoc_url="/redoc",  # Redoc UI
     openapi_url="/openapi.json"  # OpenAPI JSON spec
+)
+
+# CORS Middleware Configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[FRONTEND_ORIGIN],  # Read from .env
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 # Attach Routes

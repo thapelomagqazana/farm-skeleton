@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
-import { registerUser } from "../api/authService";
+import { AuthContext } from "../context/AuthContext";
 import InputField from "../components/InputField";
 import Button from "../components/Button";
 import { useNavigate } from "react-router-dom";
@@ -10,41 +10,29 @@ import Snackbar from "@mui/material/Snackbar";
 import MuiAlert from "@mui/material/Alert";
 
 /**
- * Validation schema for the registration form.
+ * Validation schema for the sign-in form.
  */
 const schema = yup.object().shape({
-  name: yup.string().min(3, "Name must be at least 3 characters").required("Name is required"),
   email: yup.string().email("Invalid email format").required("Email is required"),
-  password: yup
-    .string()
-    .min(6, "Password must be at least 6 characters")
-    .matches(/[A-Za-z]/, "Must contain letters")
-    .matches(/\d/, "Must contain numbers")
-    .matches(/\W/, "Must contain a special character")
-    .required("Password is required"),
-  confirmPassword: yup
-    .string()
-    .oneOf([yup.ref("password")], "Passwords must match")
-    .required("Confirm password is required"),
+  password: yup.string().min(6, "Password must be at least 6 characters").required("Password is required"),
 });
 
 /**
- * Interface for form inputs
+ * Interface for form inputs.
  */
-interface RegisterFormInputs {
-  name: string;
+interface SignInFormInputs {
   email: string;
   password: string;
-  confirmPassword: string;
 }
 
 /**
- * Register page for new users.
+ * Sign-in page for users.
  *
- * @returns {JSX.Element} The registration form.
+ * @returns {JSX.Element} The sign-in form.
  */
-const Register: React.FC = () => {
+const Signin: React.FC = () => {
   const navigate = useNavigate();
+  const authContext = useContext(AuthContext);
   const [showPassword, setShowPassword] = useState(false);
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState<string>("");
@@ -55,32 +43,28 @@ const Register: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<RegisterFormInputs>({
+  } = useForm<SignInFormInputs>({
     resolver: yupResolver(schema),
   });
 
   /**
-   * Handles form submission and registers the user.
+   * Handles form submission and signs in the user.
    */
-  const onSubmit: SubmitHandler<RegisterFormInputs> = async (data) => {
+  const onSubmit: SubmitHandler<SignInFormInputs> = async (data) => {
     try {
-      await registerUser({ name: data.name, email: data.email, password: data.password });
+      await authContext?.login(data.email, data.password);
 
       // Show success snackbar
-      setSnackbarMessage("Registration successful! Redirecting...");
+      setSnackbarMessage("Sign-in successful! Redirecting...");
       setSnackbarSeverity("success");
       setOpenSnackbar(true);
 
-      // Wait for 2 seconds before redirecting to the sign-in page
+      // Redirect to dashboard
       setTimeout(() => {
-        navigate("/signin");
+        navigate("/dashboard");
       }, 2000);
-    } catch (error: unknown) {
-      if (typeof error === "string") {
-        setSnackbarMessage(error);
-      } else {
-        setSnackbarMessage("An unexpected error occurred.");
-      }
+    } catch (error: any) {
+      setSnackbarMessage(error.response?.data?.detail || "Invalid email or password.");
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
     }
@@ -88,18 +72,10 @@ const Register: React.FC = () => {
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
-      <div className="bg-white shadow-md rounded-lg p-6 w-96">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Register</h2>
+      <div className="bg-white shadow-md rounded-lg p-6 w-96 mt-10">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">Sign In</h2>
 
         <form onSubmit={handleSubmit(onSubmit)}>
-          <InputField
-            label="Name"
-            type="text"
-            name="name"
-            placeholder="Enter your name"
-            register={register}
-            error={errors.name?.message}
-          />
           <InputField
             label="Email"
             type="email"
@@ -128,24 +104,17 @@ const Register: React.FC = () => {
             </button>
           </div>
 
-          {/* Confirm Password Input */}
-          <div className="relative">
-            <InputField
-              label="Confirm Password"
-              type={showPassword ? "text" : "password"}
-              name="confirmPassword"
-              placeholder="Confirm your password"
-              register={register}
-              error={errors.confirmPassword?.message}
-            />
-          </div>
-
-          <Button text="Register" type="submit" isLoading={isSubmitting} />
+          <Button text="Sign In" type="submit" isLoading={isSubmitting} />
         </form>
 
+        {/* Forgot Password Link */}
+        <p className="mt-2 text-gray-600 text-sm text-center">
+          <a href="/forgot-password" className="text-blue-600 hover:underline">Forgot password?</a>
+        </p>
+
         {/* Redirect Link */}
-        <p className="mt-4 text-gray-600 text-sm">
-          Already have an account? <a href="/signin" className="text-blue-600 hover:underline">Sign in</a>
+        <p className="mt-4 text-gray-600 text-sm text-center">
+          Don't have an account? <a href="/register" className="text-blue-600 hover:underline">Register</a>
         </p>
       </div>
 
@@ -164,4 +133,4 @@ const Register: React.FC = () => {
   );
 };
 
-export default Register;
+export default Signin;

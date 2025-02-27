@@ -2,10 +2,9 @@
 Authentication routes for user sign-in and JWT token generation.
 """
 import logging
-from fastapi import APIRouter, HTTPException, Request, status, Depends
+from fastapi import APIRouter, HTTPException, Request, Depends
 from app.database import db
 from app.security import verify_password, create_access_token, check_csrf, get_current_user, invalidate_token
-from datetime import datetime, timedelta, timezone
 from app.models import SignInRequest, TokenResponse, LogoutResponse
 
 router = APIRouter()

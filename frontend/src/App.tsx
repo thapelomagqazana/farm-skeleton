@@ -11,8 +11,8 @@ const AppRoutes = () => {
 const App: React.FC = () => {
   return (
     <Router>
+      <Navbar />
       <Layout>
-        <Navbar />
         <AppRoutes />
       </Layout>
     </Router>
