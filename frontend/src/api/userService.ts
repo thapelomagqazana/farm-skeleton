@@ -18,3 +18,24 @@ export const fetchUsers = async (): Promise<any[]> => {
     throw new Error("An unexpected error occurred");
   }
 };
+
+/**
+ * Retrieves the profile of a user by their ID.
+ *
+ * @param {string} userId - The ID of the user.
+ * @returns {Promise<any>} The user's profile data.
+ * @throws {Error} If the request fails.
+ */
+export const getUserProfile = async (userId: string): Promise<any> => {
+  try {
+    const response = await axios.get(`${BASE_URL}/api/users/${userId}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+        throw error.response?.data?.detail || `Failed to fetch user's profile: ${userId}`;
+    }
+    throw new Error("An unexpected error occurred");
+  }
+};

@@ -1,9 +1,9 @@
 import React, { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { fetchUsers } from "../api/userService";
-import DashboardCard from "../components/DashboardCard";
-import UserTable from "../components/UserTable";
-import ActionButton from "../components/ActionButton";
+import DashboardCard from "../components/dashboard/DashboardCard";
+import UserTable from "../components/dashboard/UserTable";
+import ActionButton from "../components/dashboard/ActionButton";
 import { useNavigate } from "react-router-dom";
 
 /**

@@ -1,6 +1,6 @@
 import React from "react";
-import Hero from "../components/Hero";
-import APIList from "../components/APIList";
+import Hero from "../components/home/Hero";
+import APIList from "../components/home/APIList";
 import FeatureCard from "../components/FeatureCard";
 
 /**

@@ -1,6 +1,6 @@
 import React from "react";
 import FeatureCard from "../components/FeatureCard";
-import Heading from "../components/Heading";
+import Heading from "../components/about/Heading";
 
 /**
  * About Page introducing the FARM Skeleton Starter Pack.
